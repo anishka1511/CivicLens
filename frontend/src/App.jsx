@@ -1,21 +1,25 @@
+import React, { Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
-import Home from './pages/Home'
-import Timeline from './pages/Timeline'
-import Quiz from './pages/Quiz'
-import Chat from './pages/Chat'
+
+const Home = React.lazy(() => import('./pages/Home'))
+const Timeline = React.lazy(() => import('./pages/Timeline'))
+const Quiz = React.lazy(() => import('./pages/Quiz'))
+const Chat = React.lazy(() => import('./pages/Chat'))
 
 function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/timeline" element={<Timeline />} />
-          <Route path="/quiz" element={<Quiz />} />
-          <Route path="/chat" element={<Chat />} />
-        </Routes>
+        <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/timeline" element={<Timeline />} />
+            <Route path="/quiz" element={<Quiz />} />
+            <Route path="/chat" element={<Chat />} />
+          </Routes>
+        </Suspense>
       </div>
     </BrowserRouter>
   )

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
-const questions = [
+const questionsStatic = [
   {
     question: 'What is the minimum age to vote in the United States?',
     options: ['16', '18', '21', '25'],
@@ -73,9 +73,10 @@ export default function Quiz() {
   const [finished, setFinished] = useState(false)
   const API = import.meta.env.VITE_API_URL || ''
 
+  const questions = useMemo(() => questionsStatic, [])
   const currentQ = questions[currentIndex]
 
-  const handleAnswer = (option) => {
+  const handleAnswer = async (option) => {
     if (selected !== null) return
     setSelected(option)
     const isCorrect = option === currentQ.correct
@@ -86,25 +87,34 @@ export default function Quiz() {
 
     // Get AI feedback
     setIsLoadingAI(true)
-    fetch(`${API}/api/quiz-check`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        question: currentQ.question,
-        selected: option,
-        correct: currentQ.correct
+    try {
+      const res = await fetch(`${API}/api/quiz-check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: currentQ.question,
+          selected: option,
+          correct: currentQ.correct
+        })
       })
-    })
-      .then(res => res.json())
-      .then(data => {
-        setAiFeedback(data.feedback)
-      })
-      .catch(() => {
-        setAiFeedback('Could not get AI feedback.')
-      })
-      .finally(() => {
-        setIsLoadingAI(false)
-      })
+
+      if (!res.ok) {
+        let msg = 'Could not get AI feedback.'
+        try {
+          const body = await res.json()
+          if (body && body.error) msg = body.error
+        } catch (_) {}
+        setAiFeedback(msg)
+        return
+      }
+
+      const data = await res.json()
+      setAiFeedback(data.feedback || 'Could not get AI feedback.')
+    } catch (networkErr) {
+      setAiFeedback('Network error — please check your connection.')
+    } finally {
+      setIsLoadingAI(false)
+    }
   }
 
   const nextQuestion = () => {
@@ -142,7 +152,8 @@ export default function Quiz() {
           <p className="text-lg font-semibold text-blue-600 mb-6">{rating.text}</p>
           <button
             onClick={reset}
-            className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+            className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            aria-label="Try the quiz again"
           >
             Try Again
           </button>
@@ -157,10 +168,10 @@ export default function Quiz() {
     <div className="max-w-2xl mx-auto p-6">
       <div className="mb-6">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm text-gray-600">Question {currentIndex + 1} of {questions.length}</span>
+          <span className="text-sm text-gray-700">Question {currentIndex + 1} of {questions.length}</span>
           <span className="text-sm font-medium text-blue-600">{Math.round(progress)}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        <div className="w-full bg-gray-200 rounded-full h-2" role="progressbar" aria-valuenow={currentIndex + 1} aria-valuemin={1} aria-valuemax={questions.length} aria-label={`Question ${currentIndex + 1} of ${questions.length}`}>
           <div
             className="bg-blue-600 h-2 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
@@ -190,9 +201,10 @@ export default function Quiz() {
                 key={i}
                 onClick={() => handleAnswer(option)}
                 disabled={selected !== null}
-                className={`w-full text-left p-4 rounded-lg border ${borderColor} ${bgColor} transition-colors disabled:cursor-not-allowed ${
+                className={`w-full text-left p-4 rounded-lg border ${borderColor} ${bgColor} transition-colors disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                   isSelected ? 'ring-2 ring-blue-300' : ''
                 }`}
+                aria-label={`Option: ${option}`}
               >
                 <span className="font-medium">{option}</span>
               </button>
@@ -201,23 +213,21 @@ export default function Quiz() {
         </div>
 
         {feedback && (
-          <p className={`mt-4 font-semibold ${
-            feedback.startsWith('Correct') ? 'text-green-700' : 'text-red-700'
-          }`}>
+          <p className={`mt-4 font-semibold ${feedback.startsWith('Correct') ? 'text-green-700' : 'text-red-700'}`} aria-live="assertive" aria-label={feedback}>
             {feedback}
           </p>
         )}
 
         {showAI && (
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200" aria-live="polite">
             {isLoadingAI ? (
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" aria-label="Loading AI feedback"></div>
                 <span className="text-sm text-blue-700">Getting AI feedback...</span>
               </div>
             ) : aiFeedback ? (
               <>
-                <div className="text-sm text-gray-600 mb-1 font-semibold">AI Tutor:</div>
+                <div className="text-sm text-gray-700 mb-1 font-semibold">AI Tutor:</div>
                 <div className="text-gray-800">{aiFeedback}</div>
               </>
             ) : null}
@@ -227,7 +237,8 @@ export default function Quiz() {
         {selected !== null && (
           <button
             onClick={nextQuestion}
-            className="mt-6 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            className="mt-6 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            aria-label={currentIndex < questions.length - 1 ? 'Next question' : 'Finish quiz'}
           >
             {currentIndex < questions.length - 1 ? 'Next Question' : 'Finish Quiz'}
           </button>

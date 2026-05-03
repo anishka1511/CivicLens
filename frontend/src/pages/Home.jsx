@@ -37,7 +37,8 @@ export default function Home() {
           </p>
           <button
             onClick={() => navigate('/timeline')}
-            className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
+            className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            aria-label="Start learning about elections"
           >
             Start Learning
           </button>
@@ -48,16 +49,24 @@ export default function Home() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid md:grid-cols-3 gap-8">
           {features.map((feature, i) => (
-            <div
+            <article
               key={i}
               onClick={() => navigate(feature.path)}
-              className="bg-white p-8 rounded-xl shadow-md border cursor-pointer hover:shadow-lg transition-shadow"
+              className="bg-white p-8 rounded-xl shadow-md border cursor-pointer hover:shadow-lg transition-shadow focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              tabIndex="0"
+              role="button"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  navigate(feature.path)
+                }
+              }}
             >
               <div className="text-5xl mb-4">{feature.icon}</div>
               <h3 className="text-2xl font-bold mb-3 text-gray-900">{feature.title}</h3>
               <p className="text-gray-600">{feature.description}</p>
-            </div>
-          ))}
+            </article>
+          ))}}
         </div>
       </div>
     </div>

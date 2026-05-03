@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 
-const phases = [
+const phasesStatic = [
   {
     name: 'Registration',
     description: 'Voter registration period where eligible citizens sign up to vote.',
@@ -74,46 +74,59 @@ const phases = [
 ]
 
 export default function Timeline() {
+  const phases = useMemo(() => phasesStatic, [])
   const [expandedPhase, setExpandedPhase] = useState(null)
-  const [explainingPhase, setExplainingPhase] = useState(null)
+  const [loadingPhase, setLoadingPhase] = useState(null)
   const [aiExplanation, setAiExplanation] = useState('')
   const API = import.meta.env.VITE_API_URL || ''
 
   const togglePhase = (index) => {
     setExpandedPhase(expandedPhase === index ? null : index)
-    setExplainingPhase(null)
+    setLoadingPhase(null)
     setAiExplanation('')
   }
 
-  const askAI = async (phase) => {
-    setExplainingPhase(phase.name)
+  const askAI = useCallback(async (phase) => {
+    setLoadingPhase(phase.name)
     setAiExplanation('')
     try {
+      const topic = String(phase.name || '').trim().slice(0, 200)
       const response = await fetch(`${API}/api/explain`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: phase.name })
+        body: JSON.stringify({ topic })
       })
+
+      if (!response.ok) {
+        let msg = 'Failed to get AI explanation. Please try again.'
+        try {
+          const body = await response.json()
+          if (body && body.error) msg = body.error
+        } catch (_) {}
+        setAiExplanation(msg)
+        return
+      }
+
       const data = await response.json()
-      setAiExplanation(data.explanation)
+      setAiExplanation(data.explanation || 'Failed to get AI explanation. Please try again.')
     } catch (error) {
-      setAiExplanation('Failed to get AI explanation. Please try again.')
+      setAiExplanation('Network error — please check your connection.')
     } finally {
-      setExplainingPhase(null)
+      setLoadingPhase(null)
     }
-  }
+  }, [API])
 
   const exploredCount = expandedPhase !== null ? 1 : 0
   const totalPhases = phases.length
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <main className="max-w-4xl mx-auto p-6" aria-label="Election process timeline">
       <h1 className="text-3xl font-bold mb-8 text-center">Election Timeline</h1>
 
       {/* Progress Bar */}
-      <div className="bg-white rounded-lg p-4 mb-8 shadow-sm">
+      <div className="bg-white rounded-lg p-4 mb-8 shadow-sm" role="progressbar" aria-valuenow={exploredCount} aria-valuemin={0} aria-valuemax={totalPhases} aria-label="Phases explored">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm text-gray-600">Phases Explored</span>
+          <span className="text-sm text-gray-700">Phases Explored</span>
           <span className="text-sm font-medium text-blue-600">{exploredCount} / {totalPhases}</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3">
@@ -135,7 +148,7 @@ export default function Timeline() {
 
             {/* Phase node */}
             <div className="relative flex items-start">
-              <div className="flex-shrink-0 w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
+              <div className="shrink-0 w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
                 {index + 1}
               </div>
               <div className="ml-6 flex-1 bg-white rounded-lg shadow-sm border p-6">
@@ -156,15 +169,16 @@ export default function Timeline() {
 
                     <button
                       onClick={() => askAI(phase)}
-                      disabled={explainingPhase === phase.name}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      disabled={loadingPhase === phase.name}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      aria-label={`Get AI explanation for ${phase.name}`}
                     >
-                      {explainingPhase === phase.name ? 'Loading...' : 'Ask AI about this'}
+                      {loadingPhase === phase.name ? 'Loading...' : 'Ask AI about this'}
                     </button>
 
                     {aiExplanation && (
-                      <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                        <div className="text-sm text-gray-600 mb-2 font-semibold">AI Explanation:</div>
+                      <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200" aria-live="polite" aria-label="AI explanation">
+                        <div className="text-sm text-gray-700 mb-2 font-semibold">AI Explanation:</div>
                         <div className="text-gray-800 whitespace-pre-line">{aiExplanation}</div>
                       </div>
                     )}
@@ -173,7 +187,15 @@ export default function Timeline() {
 
                 <button
                   onClick={() => togglePhase(index)}
-                  className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none rounded px-1"
+                  aria-expanded={expandedPhase === index}
+                  aria-label={`${expandedPhase === index ? 'Hide' : 'Show'} details for ${phase.name}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      togglePhase(index)
+                    }
+                  }}
                 >
                   {expandedPhase === index ? 'Hide Details' : 'Show Details'}
                 </button>
@@ -182,6 +204,6 @@ export default function Timeline() {
           </div>
         ))}
       </div>
-    </div>
+    </main>
   )
 }

@@ -3,3 +3,6 @@ uvicorn
 python-dotenv
 openai
 httpx
+pytest
+slowapi
+slowapi
