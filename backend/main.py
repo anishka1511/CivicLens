@@ -153,7 +153,7 @@ def sanitize_history(history: List[dict]) -> List[dict]:
 
 @app.post("/api/chat")
 @limiter.limit("20/minute")
-async def chat(req: ChatRequest):
+async def chat(request: Request, req: ChatRequest):
     if not has_valid_api_key():
         return JSONResponse(status_code=200, content={"reply": fallback_reply(req.message)})
 
@@ -189,7 +189,7 @@ async def chat(req: ChatRequest):
 
 @app.post("/api/explain")
 @limiter.limit("30/minute")
-async def explain(req: ExplainRequest):
+async def explain(request: Request, req: ExplainRequest):
     if not has_valid_api_key():
         return JSONResponse(status_code=200, content={"explanation": fallback_explanation(req.topic)})
 
@@ -226,7 +226,7 @@ async def explain(req: ExplainRequest):
 
 @app.post("/api/quiz-check")
 @limiter.limit("30/minute")
-async def quiz_check(req: QuizRequest):
+async def quiz_check(request: Request, req: QuizRequest):
     if not has_valid_api_key():
         return JSONResponse(status_code=200, content={"feedback": fallback_feedback(req.question, req.selected, req.correct)})
 
