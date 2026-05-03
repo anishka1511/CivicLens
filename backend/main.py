@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List
 from dotenv import load_dotenv
-from openai import OpenAI
-import openai as openai_lib
+from groq import Groq
+import groq as groq_lib
 from collections import OrderedDict
 import os
 import logging
@@ -17,8 +17,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-API_KEY = os.getenv("GROK_API_KEY")
-logger.info(f"GROK_API_KEY loaded: {bool(os.getenv('GROK_API_KEY'))}")
+API_KEY = os.getenv("GROQ_API_KEY")
+logger.info(f"GROQ_API_KEY loaded: {bool(os.getenv('GROQ_API_KEY'))}")
 
 # Rate limiting
 from slowapi import Limiter
@@ -35,7 +35,7 @@ def has_valid_api_key() -> bool:
 def fallback_reply(message: str) -> str:
     return (
         "I can explain election topics, but the AI backend is not configured yet. "
-        "Set GROK_API_KEY in backend/.env to enable live responses."
+        "Set GROQ_API_KEY in backend/.env to enable live responses."
     )
 
 
@@ -43,7 +43,7 @@ def fallback_explanation(topic: str) -> str:
     return (
         f"{topic} is one stage in the election process. "
         "It involves official steps that help move an election forward from preparation to results. "
-        "Set GROK_API_KEY in backend/.env to enable a fuller AI explanation."
+        "Set GROQ_API_KEY in backend/.env to enable a fuller AI explanation."
     )
 
 
@@ -55,13 +55,10 @@ def fallback_feedback(question: str, selected: str, correct: str) -> str:
 
     return (
         f"{verdict} {question} is about election knowledge and the key idea is to compare the selected answer with the correct one. "
-        "Set GROK_API_KEY in backend/.env to enable AI-generated tutoring feedback."
+        "Set GROQ_API_KEY in backend/.env to enable AI-generated tutoring feedback."
     )
 
-client = OpenAI(
-    api_key=os.getenv("GROK_API_KEY"),
-    base_url="https://api.x.ai/v1",
-)
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Configure rate limiter and FastAPI app
 limiter = Limiter(key_func=get_remote_address)
@@ -175,14 +172,14 @@ async def chat(request: Request, req: ChatRequest):
     try:
         try:
             response = client.chat.completions.create(
-                model="grok-3-mini",
+                model="llama-3.3-70b-versatile",
                 messages=messages,
                 max_tokens=300,
                 temperature=0.7
             )
         except Exception as e:
             logger.error(f"Error in /api/chat (inner): {str(e)}")
-            api_err_module = getattr(openai_lib, 'error', None)
+            api_err_module = getattr(groq_lib, 'error', None)
             api_error_type = getattr(api_err_module, 'APIError', None) if api_err_module else None
             if api_error_type and isinstance(e, api_error_type):
                 logger.error(f"APIError in /api/chat: {str(e)}")
@@ -212,7 +209,7 @@ async def explain(request: Request, req: ExplainRequest):
     try:
         try:
             response = client.chat.completions.create(
-                model="grok-3-mini",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": req.topic}
@@ -222,7 +219,7 @@ async def explain(request: Request, req: ExplainRequest):
             )
         except Exception as e:
             logger.error(f"Error in /api/explain (inner): {str(e)}")
-            api_err_module = getattr(openai_lib, 'error', None)
+            api_err_module = getattr(groq_lib, 'error', None)
             api_error_type = getattr(api_err_module, 'APIError', None) if api_err_module else None
             if api_error_type and isinstance(e, api_error_type):
                 logger.error(f"APIError in /api/explain: {str(e)}")
@@ -249,7 +246,7 @@ async def quiz_check(request: Request, req: QuizRequest):
     try:
         try:
             response = client.chat.completions.create(
-                model="grok-3-mini",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
@@ -259,7 +256,7 @@ async def quiz_check(request: Request, req: QuizRequest):
             )
         except Exception as e:
             logger.error(f"Error in /api/quiz-check (inner): {str(e)}")
-            api_err_module = getattr(openai_lib, 'error', None)
+            api_err_module = getattr(groq_lib, 'error', None)
             api_error_type = getattr(api_err_module, 'APIError', None) if api_err_module else None
             if api_error_type and isinstance(e, api_error_type):
                 logger.error(f"APIError in /api/quiz-check: {str(e)}")
@@ -273,13 +270,13 @@ async def quiz_check(request: Request, req: QuizRequest):
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
-@app.get("/api/test-grok")
-async def test_grok():
+@app.get("/api/test-ai")
+async def test_ai():
     if not has_valid_api_key():
-        return JSONResponse(status_code=200, content={"result": "GROK_API_KEY not configured"})
+        return JSONResponse(status_code=200, content={"result": "GROQ_API_KEY not configured"})
     try:
         response = client.chat.completions.create(
-            model="grok-3-mini",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": "You are a friendly assistant."},
                 {"role": "user", "content": "say hello"},
@@ -288,8 +285,8 @@ async def test_grok():
         )
         return JSONResponse(status_code=200, content={"result": response.choices[0].message.content})
     except Exception as e:
-        logger.error(f"Error in /api/test-grok: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": "Grok test failed"})
+        logger.error(f"Error in /api/test-ai: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": "AI test failed"})
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
