@@ -3,6 +3,4 @@ uvicorn
 python-dotenv
 groq
 httpx
-pytest
-slowapi
 slowapi

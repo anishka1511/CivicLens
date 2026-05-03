@@ -1,15 +1,21 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import List
-from dotenv import load_dotenv
 from groq import Groq
-import groq as groq_lib
-from collections import OrderedDict
 import os
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
 import logging
+
+from collections import OrderedDict
+from typing import List
+from fastapi import Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+import groq as groq_lib
 
 load_dotenv()
 
@@ -19,14 +25,6 @@ logger = logging.getLogger(__name__)
 
 API_KEY = os.getenv("GROQ_API_KEY")
 logger.info(f"GROQ_API_KEY loaded: {bool(os.getenv('GROQ_API_KEY'))}")
-
-# Rate limiting
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-
-
 
 def has_valid_api_key() -> bool:
     return bool(API_KEY) and API_KEY != "your_key_here"
