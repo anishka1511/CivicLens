@@ -9,10 +9,16 @@ from openai import OpenAI
 import openai as openai_lib
 from collections import OrderedDict
 import os
+import logging
 
 load_dotenv()
 
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 API_KEY = os.getenv("GROK_API_KEY")
+logger.info(f"GROK_API_KEY loaded: {bool(os.getenv('GROK_API_KEY'))}")
 
 # Rate limiting
 from slowapi import Limiter
@@ -53,8 +59,8 @@ def fallback_feedback(question: str, selected: str, correct: str) -> str:
     )
 
 client = OpenAI(
+    api_key=os.getenv("GROK_API_KEY"),
     base_url="https://api.x.ai/v1",
-    api_key=API_KEY or ""
 )
 
 # Configure rate limiter and FastAPI app
@@ -175,16 +181,19 @@ async def chat(request: Request, req: ChatRequest):
                 temperature=0.7
             )
         except Exception as e:
+            logger.error(f"Error in /api/chat (inner): {str(e)}")
             api_err_module = getattr(openai_lib, 'error', None)
             api_error_type = getattr(api_err_module, 'APIError', None) if api_err_module else None
             if api_error_type and isinstance(e, api_error_type):
+                logger.error(f"APIError in /api/chat: {str(e)}")
                 return JSONResponse(status_code=502, content={"error": "AI service unavailable"})
             # unknown error: surface a 500 to client without internal details
             raise
 
         reply = getattr(response.choices[0].message, 'content', '')
         return JSONResponse(status_code=200, content={"reply": reply})
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in /api/chat: {str(e)}")
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 @app.post("/api/explain")
@@ -212,16 +221,19 @@ async def explain(request: Request, req: ExplainRequest):
                 temperature=0.7
             )
         except Exception as e:
+            logger.error(f"Error in /api/explain (inner): {str(e)}")
             api_err_module = getattr(openai_lib, 'error', None)
             api_error_type = getattr(api_err_module, 'APIError', None) if api_err_module else None
             if api_error_type and isinstance(e, api_error_type):
+                logger.error(f"APIError in /api/explain: {str(e)}")
                 return JSONResponse(status_code=502, content={"error": "AI service unavailable"})
             raise
 
         explanation = getattr(response.choices[0].message, 'content', '')
         explain_cache_set(req.topic, explanation)
         return JSONResponse(status_code=200, content={"explanation": explanation})
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in /api/explain: {str(e)}")
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 @app.post("/api/quiz-check")
@@ -246,16 +258,38 @@ async def quiz_check(request: Request, req: QuizRequest):
                 temperature=0.7
             )
         except Exception as e:
+            logger.error(f"Error in /api/quiz-check (inner): {str(e)}")
             api_err_module = getattr(openai_lib, 'error', None)
             api_error_type = getattr(api_err_module, 'APIError', None) if api_err_module else None
             if api_error_type and isinstance(e, api_error_type):
+                logger.error(f"APIError in /api/quiz-check: {str(e)}")
                 return JSONResponse(status_code=502, content={"error": "AI service unavailable"})
             raise
 
         feedback = getattr(response.choices[0].message, 'content', '')
         return JSONResponse(status_code=200, content={"feedback": feedback})
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in /api/quiz-check: {str(e)}")
         return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+
+@app.get("/api/test-grok")
+async def test_grok():
+    if not has_valid_api_key():
+        return JSONResponse(status_code=200, content={"result": "GROK_API_KEY not configured"})
+    try:
+        response = client.chat.completions.create(
+            model="grok-3-mini",
+            messages=[
+                {"role": "system", "content": "You are a friendly assistant."},
+                {"role": "user", "content": "say hello"},
+            ],
+            max_tokens=50,
+        )
+        return JSONResponse(status_code=200, content={"result": response.choices[0].message.content})
+    except Exception as e:
+        logger.error(f"Error in /api/test-grok: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": "Grok test failed"})
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
