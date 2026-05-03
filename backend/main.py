@@ -9,9 +9,42 @@ import os
 
 load_dotenv()
 
+API_KEY = os.getenv("GROK_API_KEY")
+
+
+def has_valid_api_key() -> bool:
+    return bool(API_KEY) and API_KEY != "your_key_here"
+
+
+def fallback_reply(message: str) -> str:
+    return (
+        "I can explain election topics, but the AI backend is not configured yet. "
+        "Set GROK_API_KEY in backend/.env to enable live responses."
+    )
+
+
+def fallback_explanation(topic: str) -> str:
+    return (
+        f"{topic} is one stage in the election process. "
+        "It involves official steps that help move an election forward from preparation to results. "
+        "Set GROK_API_KEY in backend/.env to enable a fuller AI explanation."
+    )
+
+
+def fallback_feedback(question: str, selected: str, correct: str) -> str:
+    if selected == correct:
+        verdict = "Your answer is correct."
+    else:
+        verdict = f"Your answer is incorrect. The correct answer is {correct}."
+
+    return (
+        f"{verdict} {question} is about election knowledge and the key idea is to compare the selected answer with the correct one. "
+        "Set GROK_API_KEY in backend/.env to enable AI-generated tutoring feedback."
+    )
+
 client = OpenAI(
     base_url="https://api.x.ai/v1",
-    api_key=os.getenv("GROK_API_KEY")
+    api_key=API_KEY or ""
 )
 
 app = FastAPI()
@@ -43,6 +76,9 @@ async def health():
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     try:
+        if not has_valid_api_key():
+            return {"reply": fallback_reply(req.message)}
+
         system_prompt = "You are an expert on election processes. Explain election steps, timelines, voting rights, and processes clearly and simply. Keep answers concise and beginner-friendly."
         
         messages = [{"role": "system", "content": system_prompt}]
@@ -63,6 +99,9 @@ async def chat(req: ChatRequest):
 @app.post("/api/explain")
 async def explain(req: ExplainRequest):
     try:
+        if not has_valid_api_key():
+            return {"explanation": fallback_explanation(req.topic)}
+
         system_prompt = "You are an election education assistant. Give a clear, 3-paragraph explanation of the given election topic for a general audience."
         
         response = client.chat.completions.create(
@@ -81,6 +120,9 @@ async def explain(req: ExplainRequest):
 @app.post("/api/quiz-check")
 async def quiz_check(req: QuizCheckRequest):
     try:
+        if not has_valid_api_key():
+            return {"feedback": fallback_feedback(req.question, req.selected, req.correct)}
+
         system_prompt = "You are an election tutor. The user answered a quiz question. Explain in 2 sentences why the answer is correct or incorrect."
         
         user_message = f"Question: {req.question}\nUser's answer: {req.selected}\nCorrect answer: {req.correct}"
